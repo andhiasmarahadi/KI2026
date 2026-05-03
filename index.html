@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Verifikasi Siswa - SMPN 1 Dawan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; user-select: none; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1); }
+        .btn-primary { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; transition: all 0.3s ease; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 2rem; border-radius: 0.5rem; color: white; z-index: 10001; transform: translateY(150%); transition: transform 0.3s ease; }
+        #custom-modal { display: none; position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div id="toast"></div>
+
+    <div id="custom-modal">
+        <div class="glass-card p-6 w-full max-w-md mx-4 text-center">
+            <h3 class="text-xl font-bold mb-4">Konfirmasi</h3>
+            <div id="modal-content" class="mb-6 text-gray-600"></div>
+            <div class="flex justify-center gap-3">
+                <button onclick="closeModal()" class="px-6 py-2 bg-gray-200 rounded-lg font-medium">Batal</button>
+                <button id="modal-confirm-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="w-full py-8 flex flex-col items-center">
+        <img src="https://i.ibb.co.com/DPQsmGBk/logo-smp.png" alt="Logo" class="h-20 mb-3">
+        <h1 class="text-2xl font-bold text-blue-900">SMP NEGERI 1 DAWAN</h1>
+        <p class="text-gray-500">Verifikasi Data Siswa Online</p>
+    </header>
+
+    <main class="container mx-auto px-4 pb-20">
+        <!-- LOGIN VIEW -->
+        <section id="view-login" class="max-w-md mx-auto mt-6">
+            <div class="glass-card p-8">
+                <h2 class="text-xl font-bold text-center mb-6 text-gray-800">Login Siswa</h2>
+                <div class="space-y-4">
+                    <input type="text" id="siswa-user" class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="NISN">
+                    <input type="password" id="siswa-pass" class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password">
+                    <button onclick="loginSiswa()" id="btn-login-siswa" class="w-full btn-primary py-3 rounded-lg font-bold">MASUK</button>
+                </div>
+                <div class="mt-8 pt-6 border-t text-center">
+                    <button onclick="showAdminGate()" class="text-sm text-blue-600 font-medium hover:underline">Halaman Admin</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ADMIN GATE -->
+        <section id="view-admin-gate" class="hidden max-w-md mx-auto mt-6">
+            <div class="glass-card p-8 border-2 border-blue-200">
+                <h2 class="text-lg font-bold text-center mb-4">Login Pak Andhi</h2>
+                <input type="password" id="admin-pass" class="w-full p-3 border rounded-lg mb-4" placeholder="Password Admin">
+                <button onclick="loginAdmin()" id="btn-login-admin" class="w-full bg-blue-800 text-white py-3 rounded-lg font-bold">BUKA DASHBOARD</button>
+                <button onclick="showView('view-login')" class="w-full text-sm text-gray-500 py-2 mt-2">Kembali</button>
+            </div>
+        </section>
+
+        <!-- DASHBOARD SISWA -->
+        <section id="view-dash-siswa" class="hidden max-w-2xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-gray-700">DATA PROFIL</h2>
+                <button onclick="location.reload()" class="text-red-500 font-bold">Keluar</button>
+            </div>
+            <div class="glass-card overflow-hidden">
+                <div id="siswa-content" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                <div class="p-6 bg-blue-50 border-t">
+                    <p class="font-bold mb-3 text-blue-900">Apakah data di atas sudah benar?</p>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex items-center gap-2 bg-white p-3 rounded border cursor-pointer"><input type="radio" name="konf" value="Sesuai"> Data Sesuai</label>
+                        <label class="flex items-center gap-2 bg-white p-3 rounded border cursor-pointer"><input type="radio" name="konf" value="Tidak Sesuai"> Ada Kesalahan</label>
+                    </div>
+                    <button onclick="submitSiswa()" id="btn-konf" class="w-full btn-primary py-3 rounded-lg mt-4 font-bold">SIMPAN KONFIRMASI</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- DASHBOARD ADMIN -->
+        <section id="view-dash-admin" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-xl font-bold">Dashboard Admin</h1>
+                <div class="flex gap-2">
+                    <button onclick="showView('view-settings')" class="p-2 bg-gray-200 rounded"><i class="fas fa-cog"></i></button>
+                    <button onclick="location.reload()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="glass-card p-4 border-l-4 border-blue-500"><p class="text-xs">Total</p><h3 id="st-total" class="text-xl font-bold">0</h3></div>
+                <div class="glass-card p-4 border-l-4 border-green-500"><p class="text-xs">Sesuai</p><h3 id="st-sesuai" class="text-xl font-bold">0</h3></div>
+                <div class="glass-card p-4 border-l-4 border-red-500"><p class="text-xs">Salah</p><h3 id="st-salah" class="text-xl font-bold">0</h3></div>
+                <div class="glass-card p-4 border-l-4 border-yellow-500"><p class="text-xs">Belum</p><h3 id="st-belum" class="text-xl font-bold">0</h3></div>
+            </div>
+            <div class="flex gap-2 mb-4">
+                <button onclick="showView('view-import')" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">Import Excel</button>
+                <button onclick="exportRekap()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold">Download Rekap</button>
+            </div>
+            <div class="glass-card overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-100">
+                        <tr><th class="p-3 text-sm">NISN</th><th class="p-3 text-sm">Nama</th><th class="p-3 text-sm">Kelas</th><th class="p-3 text-sm text-center">Status</th><th class="p-3 text-sm text-right">Aksi</th></tr>
+                    </thead>
+                    <tbody id="admin-table" class="divide-y"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VIEW IMPORT & SETTINGS DISINI (Disederhanakan untuk efisiensi) -->
+        <section id="view-import" class="hidden max-w-md mx-auto">
+            <div class="glass-card p-8">
+                <h2 class="font-bold mb-4">Import Data</h2>
+                <input type="file" id="file-excel" class="mb-4 block w-full text-sm">
+                <button onclick="doImport()" id="btn-imp" class="w-full bg-green-600 text-white py-3 rounded font-bold">UPLOAD DATA</button>
+                <button onclick="showView('view-dash-admin')" class="w-full py-2 text-gray-500 mt-2">Batal</button>
+            </div>
+        </section>
+
+        <section id="view-settings" class="hidden max-w-md mx-auto">
+            <div class="glass-card p-8">
+                <h2 class="font-bold mb-4">Ganti Password Admin</h2>
+                <input type="password" id="new-p" class="w-full p-3 border rounded mb-2" placeholder="Password Baru">
+                <input type="password" id="new-p2" class="w-full p-3 border rounded mb-4" placeholder="Konfirmasi">
+                <button onclick="saveNewPass()" id="btn-p" class="w-full btn-primary py-3 rounded font-bold">SIMPAN PERMANEN</button>
+                <button onclick="showView('view-dash-admin')" class="w-full py-2 text-gray-500 mt-2">Batal</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /** KONFIGURASI PAK ANDHI **/
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxufZXJoieDxIFTxIlSWN-lehWXGwNghd10Rwzlys4vMg-lx3Y8WSzB982EOzt0ptyADw/exec"; 
+
+        let userState = null;
+        let dbSiswa = [];
+
+        function showView(id) {
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function showAdminGate() { showView('view-admin-gate'); }
+
+        async function callGAS(payload) {
+            const response = await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        }
+
+        // --- SISTEM ASLI (Hanya jalan di GAS/GitHub) ---
+        // Karena GitHub tidak bisa 'google.script.run', kita gunakan 'fetch' ke URL Web App GAS.
+        // Catatan: Pastikan di Apps Script Anda sudah mengizinkan akses 'Anyone'.
+
+        async function loginSiswa() {
+            const u = document.getElementById('siswa-user').value;
+            const p = document.getElementById('siswa-pass').value;
+            if(!u || !p) return showToast("Isi NISN!", "error");
+            
+            setLoading('btn-login-siswa', true);
+            try {
+                // Gunakan fetch ke GAS_URL
+                const res = await fetch(GAS_URL + "?action=loginSiswa&nisn=" + u + "&pass=" + p);
+                const data = await res.json();
+                if(data.success) {
+                    userState = data.data;
+                    renderSiswa();
+                    showView('view-dash-siswa');
+                } else { showToast(data.message, "error"); }
+            } catch(e) { 
+                showToast("Cek koneksi atau URL GAS Anda", "error"); 
+            }
+            setLoading('btn-login-siswa', false);
+        }
+
+        async function loginAdmin() {
+            const p = document.getElementById('admin-pass').value;
+            setLoading('btn-login-admin', true);
+            try {
+                const res = await fetch(GAS_URL + "?action=loginAdmin&pass=" + p);
+                const data = await res.json();
+                if(data.success) {
+                    loadAdminData();
+                } else { showToast("Password Salah", "error"); }
+            } catch(e) { showToast("Error koneksi", "error"); }
+            setLoading('btn-login-admin', false);
+        }
+
+        async function loadAdminData() {
+            const res = await fetch(GAS_URL + "?action=getAllSiswa");
+            const data = await res.json();
+            if(data.success) {
+                dbSiswa = data.data;
+                renderAdminTable();
+                showView('view-dash-admin');
+            }
+        }
+
+        function renderAdminTable() {
+            const b = document.getElementById('admin-table');
+            b.innerHTML = '';
+            let s = { t:0, s:0, x:0, b:0 };
+            dbSiswa.forEach(i => {
+                s.t++;
+                if(i.Status_Konfirmasi == 'Sesuai') s.s++;
+                else if(i.Status_Konfirmasi == 'Tidak Sesuai') s.x++;
+                else s.b++;
+
+                const tr = `<tr>
+                    <td class="p-3 text-sm">${i.NISN}</td>
+                    <td class="p-3 text-sm font-bold">${i.Nama}</td>
+                    <td class="p-3 text-sm">${i.Kelas}</td>
+                    <td class="p-3 text-center"><span class="text-[10px] p-1 rounded ${i.Status_Konfirmasi=='Sesuai'?'bg-green-100 text-green-700':'bg-yellow-100 text-yellow-700'}">${i.Status_Konfirmasi}</span></td>
+                    <td class="p-3 text-right"><button onclick="deleteSiswa('${i.NISN}')" class="text-red-500"><i class="fas fa-trash"></i></button></td>
+                </tr>`;
+                b.innerHTML += tr;
+            });
+            document.getElementById('st-total').innerText = s.t;
+            document.getElementById('st-sesuai').innerText = s.s;
+            document.getElementById('st-salah').innerText = s.x;
+            document.getElementById('st-belum').innerText = s.b;
+        }
+
+        async function doImport() {
+            const f = document.getElementById('file-excel').files[0];
+            if(!f) return;
+            setLoading('btn-imp', true);
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+                const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                const res = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({action:'importSiswa', data: data})
+                });
+                const r = await res.json();
+                if(r.success) { showToast("Berhasil Import", "success"); loadAdminData(); }
+            };
+            reader.readAsArrayBuffer(f);
+            setLoading('btn-imp', false);
+        }
+
+        function renderSiswa() {
+            const d = userState;
+            document.getElementById('siswa-content').innerHTML = `
+                <div class="border-b p-2"><p class="text-xs text-gray-400">NISN</p><b>${d.NISN}</b></div>
+                <div class="border-b p-2"><p class="text-xs text-gray-400">Nama</p><b>${d.Nama}</b></div>
+                <div class="border-b p-2"><p class="text-xs text-gray-400">Kelas</p><b>${d.Kelas}</b></div>
+                <div class="border-b p-2"><p class="text-xs text-gray-400">Status</p><b>${d.Status_Konfirmasi}</b></div>
+            `;
+        }
+
+        async function submitSiswa() {
+            const rad = document.querySelector('input[name="konf"]:checked');
+            if(!rad) return;
+            setLoading('btn-konf', true);
+            const res = await fetch(GAS_URL + `?action=submitKonfirmasi&nisn=${userState.NISN}&status=${rad.value}`);
+            const data = await res.json();
+            if(data.success) {
+                showToast("Konfirmasi Terkirim", "success");
+                location.reload();
+            }
+            setLoading('btn-konf', false);
+        }
+
+        // Utils
+        function setLoading(id, is) { 
+            const b = document.getElementById(id);
+            if(is) b.innerHTML = `<span class="loader"></span>`;
+            else b.innerHTML = "PROSES SELESAI";
+        }
+        function showToast(m, t) {
+            const el = document.getElementById('toast');
+            el.innerText = m; el.style.backgroundColor = t=='success'?'#10b981':'#ef4444';
+            el.style.transform = 'translateY(0)';
+            setTimeout(() => el.style.transform = 'translateY(150%)', 3000);
+        }
+        function closeModal() { document.getElementById('custom-modal').style.display='none'; }
+    </script>
+</body>
+</html>
