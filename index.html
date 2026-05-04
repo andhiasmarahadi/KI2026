@@ -3,574 +3,833 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Verifikasi Data Siswa - SMPN 1 Dawan</title>
+    <title>Sistem Verifikasi Data Siswa</title>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- SheetJS for Excel handling -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- SheetJS (Excel Parser & Exporter) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
-            user-select: none; /* Anti Copy */
+            /* Disable Selection for security */
+            user-select: none; 
+            -webkit-user-select: none;
         }
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .loader {
-            border-top-color: #3498db;
-            animation: spinner 1.5s linear infinite;
-        }
-        @keyframes spinner {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        /* Sembunyikan scrollbar tapi tetap bisa scroll */
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        #app-container { min-height: 100vh; }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        .hidden-section { display: none !important; }
     </style>
 </head>
-<body oncontextmenu="return false;"> <!-- Anti Klik Kanan -->
+<body class="antialiased min-h-screen text-gray-800 transition-all duration-300">
 
-    <!-- CONFIGURATION & STATE -->
+    <!-- PROTEKSI APLIKASI (Anti Inspect & Klik Kanan) -->
     <script>
-        // KONFIGURASI APLIKASI
-        // UBAH IS_PREVIEW KE false JIKA AKAN DI-DEPLOY KE WEB APP GAS
-        const IS_PREVIEW = false; 
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzkCNxKz7pSsjiI7VnahCZhCew-3dCxRe9cmxpwzYbIMgRLeapEU-LQ8hMPAqsdULXVdA/exec";
-        
-        // State Management
-        let currentState = {
-            view: 'login', // login, admin-login, student-dash, admin-dash
-            user: null,
-            allStudents: [],
-            stats: { total: 0, sesuai: 0, tidak: 0, belum: 0 }
-        };
-
-        // Dummy Data untuk Mode Preview
-        const DUMMY_DATA = [
-            { nisn: '12345', nama: 'Siswa Percobaan', tempat: 'Klungkung', tanggal: '2008-01-01', kelas: '9A', status: 'Belum' },
-            { nisn: '11111', nama: 'Budi Santoso', tempat: 'Dawan', tanggal: '2009-05-12', kelas: '8B', status: 'Sesuai' },
-            { nisn: '22222', nama: 'Ani Wijaya', tempat: 'Semarapura', tanggal: '2008-11-20', kelas: '9C', status: 'Tidak Sesuai' }
-        ];
-        const DUMMY_ADMIN_PASS = "50102335";
+        // Memblokir Klik Kanan
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        // Memblokir Shortcut Inspeksi
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123) return false; // F12
+            if (e.ctrlKey && e.shiftKey && (e.keyCode == 'I'.charCodeAt(0) || e.keyCode == 'J'.charCodeAt(0) || e.keyCode == 'C'.charCodeAt(0))) return false;
+            if (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) return false; // Ctrl+U
+        }
     </script>
 
-    <div id="app-container" class="flex flex-col">
-        <!-- Notifikasi Loading Global -->
-        <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-[9999] hidden flex items-center justify-center">
-            <div class="bg-white p-5 rounded-lg flex flex-col items-center">
-                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
-                <p class="text-gray-700 font-medium">Memproses data...</p>
-            </div>
-        </div>
+    <!-- KONFIGURASI APLIKASI -->
+    <script>
+        // UBAH IS_PREVIEW KE false JIKA AKAN DI-HUBUNGKAN KE GOOGLE APPS SCRIPT
+        const IS_PREVIEW = false; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxidLANvexIRurB8tEQAhHqeFEiG92P4G5ZnAUHXdsjYph6Bo4PlXwX1bAFO_FdIJaITw/exec";
+        
+        // State Global
+        let currentRole = null;
+        let currentUserData = null;
+        let allSiswaData = [];
+        let currentFilter = 'All';
+    </script>
 
-        <!-- Render Target -->
-        <div id="main-content" class="flex-grow flex items-center justify-center p-4"></div>
-    </div>
-
-    <!-- TEMPLATES -->
-    <script id="tpl-login" type="text/template">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 transform transition-all hover:scale-[1.01]">
-            <div class="flex flex-col items-center mb-8">
-                <img src="https://i.ibb.co.com/DPQsmGBk/logo-smp.png" alt="Logo SMPN 1 Dawan" class="w-24 h-24 object-contain mb-4">
-                <h1 class="text-2xl font-bold text-blue-800 text-center uppercase">Verifikasi Data Siswa</h1>
-                <p class="text-gray-500 text-sm">SMP Negeri 1 Dawan</p>
+    <!-- 1. HAL halaman LOGIN SISWA -->
+    <section id="login-siswa-section" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div class="glass-effect p-8 rounded-2xl shadow-xl w-full max-w-md border border-white">
+            <div class="text-center mb-8">
+                <!-- Fallback Logo jika URL spesifik mati -->
+                <img src="https://i.ibb.co.com/BVGjXVL7/logo-baru.png" 
+                     onerror="this.src='https://ui-avatars.com/api/?name=SMPN+1+Dawan&background=1d4ed8&color=fff&rounded=true&size=100'" 
+                     alt="Logo SMPN 1 Dawan" class="w-24 h-24 mx-auto mb-4 rounded-full shadow-md object-cover bg-white p-1">
+                <h1 class="text-2xl font-bold text-gray-800">Verifikasi Data Siswa</h1>
+                <p class="text-sm text-gray-500 mt-2">SMP Negeri 1 Dawan</p>
             </div>
             
-            <div class="space-y-4">
+            <form id="form-login-siswa" class="space-y-5">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Username (NISN)</label>
-                    <input type="text" id="login-user" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" placeholder="Masukkan NISN">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" id="siswa-user" required class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm transition-shadow">
+                    </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Password (NISN)</label>
-                    <input type="password" id="login-pass" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" placeholder="Masukkan Password">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" id="siswa-pass" required class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm transition-shadow">
+                    </div>
                 </div>
-                <button onclick="handleLogin()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 rounded-lg shadow-lg transition-all active:scale-95">
-                    MASUK KE SISTEM
+                <button type="submit" class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                    Masuk Sekarang
+                </button>
+            </form>
+            
+            <div class="mt-8 text-center">
+                <button onclick="switchView('login-admin-section')" class="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fas fa-shield-halved mr-1"></i> Halaman Untuk Pak Andhi
                 </button>
             </div>
-
-            <div class="mt-8 pt-6 border-t border-dashed border-gray-200 text-center">
-                <a href="javascript:void(0)" onclick="navigateTo('admin-login')" class="text-xs text-gray-400 hover:text-blue-600 transition-colors">
-                    Halaman Untuk Pak Andhi
-                </a>
-            </div>
         </div>
-    </script>
+    </section>
 
-    <script id="tpl-admin-login" type="text/template">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 border-t-4 border-yellow-500">
-            <div class="text-center mb-6">
-                <span class="text-4xl">😎</span>
-                <h2 class="text-xl font-semibold mt-4 text-gray-800">Selamat Datang Pak Andhi Ganteng, Masukin Passwordnya dulu donk :D</h2>
+    <!-- 2. HALAMAN LOGIN ADMIN -->
+    <section id="login-admin-section" class="hidden-section min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-800 to-gray-900">
+        <div class="glass-effect p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700">
+            <div class="text-center mb-8">
+                <img src="https://i.ibb.co.com/60nT2crT/Whats-App-Image-2026-05-04-at-10-31-34-AM.jpg" alt="Foto Pak Andhi" class="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg object-cover border-4 border-gray-200">
+                <h1 class="text-xl font-bold text-gray-800 leading-snug">Selamat Datang Pak Andhi Ganteng, Masukin Passwordnya dulu donk :D</h1>
             </div>
-            <div class="space-y-4">
-                <input type="password" id="admin-pass" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-yellow-500 focus:outline-none text-center text-xl tracking-widest" placeholder="••••••••">
-                <div class="flex gap-2">
-                    <button onclick="navigateTo('login')" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition-all">BATAL</button>
-                    <button onclick="handleAdminLogin()" class="flex-[2] bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-lg shadow-lg transition-all">MASUK PAK E!</button>
-                </div>
-            </div>
-        </div>
-    </script>
-
-    <script id="tpl-student-dash" type="text/template">
-        <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div class="bg-blue-800 p-6 text-white flex justify-between items-center">
+            
+            <form id="form-login-admin" class="space-y-5">
                 <div>
-                    <h2 class="text-xl font-bold">Dashboard Siswa</h2>
-                    <p class="text-blue-200 text-xs">Pastikan data Anda sudah benar</p>
-                </div>
-                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 p-2 rounded-lg text-sm">Keluar</button>
-            </div>
-            <div class="p-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                        <p class="text-xs text-blue-500 font-bold uppercase mb-1">Nama Lengkap</p>
-                        <p class="font-semibold text-gray-800 text-lg">{{nama}}</p>
-                    </div>
-                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                        <p class="text-xs text-blue-500 font-bold uppercase mb-1">NISN</p>
-                        <p class="font-semibold text-gray-800 text-lg">{{nisn}}</p>
-                    </div>
-                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                        <p class="text-xs text-blue-500 font-bold uppercase mb-1">Tempat Lahir</p>
-                        <p class="font-semibold text-gray-800 text-lg">{{tempat}}</p>
-                    </div>
-                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                        <p class="text-xs text-blue-500 font-bold uppercase mb-1">Tanggal Lahir</p>
-                        <p class="font-semibold text-gray-800 text-lg">{{tanggal}}</p>
-                    </div>
-                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-100 md:col-span-2">
-                        <p class="text-xs text-blue-500 font-bold uppercase mb-1">Kelas</p>
-                        <p class="font-semibold text-gray-800 text-lg">{{kelas}}</p>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-key text-gray-400"></i>
+                        </div>
+                        <input type="password" id="admin-pass" placeholder="••••••••" required class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-center text-lg tracking-widest transition-shadow">
                     </div>
                 </div>
-
-                <div class="bg-gray-100 p-6 rounded-2xl border-2 border-dashed border-gray-300">
-                    <p class="text-center font-bold text-gray-700 mb-4">Apakah data di atas sudah sesuai?</p>
-                    <div class="flex justify-center gap-8">
-                        <label class="flex items-center space-x-3 cursor-pointer group">
-                            <input type="radio" name="confirm" value="Sesuai" class="w-5 h-5 text-green-600 focus:ring-green-500" {{check_sesuai}}>
-                            <span class="text-lg font-medium text-gray-600 group-hover:text-green-600">Sesuai</span>
-                        </label>
-                        <label class="flex items-center space-x-3 cursor-pointer group">
-                            <input type="radio" name="confirm" value="Tidak Sesuai" class="w-5 h-5 text-red-600 focus:ring-red-500" {{check_tidak}}>
-                            <span class="text-lg font-medium text-gray-600 group-hover:text-red-600">Tidak Sesuai</span>
-                        </label>
-                    </div>
-                    <button onclick="submitKonfirmasi()" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md transition-all">SIMPAN KONFIRMASI</button>
-                </div>
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 focus:outline-none transition-colors">
+                    Login Admin
+                </button>
+            </form>
+            
+            <div class="mt-6 text-center">
+                <button onclick="switchView('login-siswa-section')" class="text-sm text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-arrow-left mr-1"></i> Kembali
+                </button>
             </div>
         </div>
-    </script>
+    </section>
 
-    <script id="tpl-admin-dash" type="text/template">
-        <div class="w-full max-w-6xl flex flex-col h-[90vh]">
-            <!-- Header Stats -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div onclick="filterData('Semua')" class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition-all">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Total Siswa</p>
-                    <p class="text-2xl font-bold text-blue-600">{{total}}</p>
-                </div>
-                <div onclick="filterData('Sesuai')" class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Sesuai</p>
-                    <p class="text-2xl font-bold text-green-600">{{sesuai}}</p>
-                </div>
-                <div onclick="filterData('Tidak Sesuai')" class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 cursor-pointer hover:shadow-md transition-all">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Tidak Sesuai</p>
-                    <p class="text-2xl font-bold text-red-600">{{tidak}}</p>
-                </div>
-                <div onclick="filterData('Belum')" class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-yellow-500 cursor-pointer hover:shadow-md transition-all">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Belum Konfirmasi</p>
-                    <p class="text-2xl font-bold text-yellow-600">{{belum}}</p>
+    <!-- 3. DASHBOARD SISWA -->
+    <section id="dashboard-siswa-section" class="hidden-section min-h-screen bg-gray-50 pb-12">
+        <nav class="bg-blue-600 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-user-graduate text-white text-2xl mr-3"></i>
+                        <span class="text-white font-semibold text-lg">Area Siswa</span>
+                    </div>
+                    <div class="flex items-center">
+                        <button onclick="logout()" class="text-white bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
                 </div>
             </div>
+        </nav>
 
-            <!-- Main Content Card -->
-            <div class="bg-white flex-grow rounded-2xl shadow-xl overflow-hidden flex flex-col">
-                <div class="p-6 border-b flex flex-wrap justify-between items-center gap-4">
-                    <div class="flex items-center gap-4">
-                        <img src="https://i.ibb.co.com/DPQsmGBk/logo-smp.png" class="h-10 w-auto">
-                        <h2 class="text-xl font-bold text-gray-800">Panel Admin Pak Andhi</h2>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button onclick="showImportModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Import Kolektif</button>
-                        <button onclick="exportExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Download Rekap</button>
-                        <button onclick="showAddModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Tambah Data</button>
-                        <button onclick="showSettingsModal()" class="bg-gray-800 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-medium">⚙️</button>
-                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">Keluar</button>
-                    </div>
+        <div class="max-w-3xl mx-auto mt-10 px-4">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-blue-50 border-b border-gray-200 px-6 py-4">
+                    <h2 class="text-lg font-bold text-gray-800">Detail Data Pribadi</h2>
+                    <p class="text-sm text-gray-500">Silakan periksa kebenaran data di bawah ini.</p>
                 </div>
                 
-                <div class="overflow-auto flex-grow p-6">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="sticky top-0 bg-gray-50 text-gray-600 text-sm uppercase">
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">NISN</p>
+                            <p id="ds-nisn" class="mt-1 text-lg font-medium text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Lengkap</p>
+                            <p id="ds-nama" class="mt-1 text-lg font-medium text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tempat Lahir</p>
+                            <p id="ds-tempat" class="mt-1 text-lg font-medium text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Lahir</p>
+                            <p id="ds-tanggal" class="mt-1 text-lg font-medium text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Kelas</p>
+                            <p id="ds-kelas" class="mt-1 text-lg font-medium text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status Konfirmasi Saat Ini</p>
+                            <p id="ds-status" class="mt-1 inline-block px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">-</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-10 border-t border-gray-200 pt-6">
+                        <h3 class="text-md font-bold text-gray-800 mb-4">Apakah data Anda sudah sesuai?</h3>
+                        <form id="form-konfirmasi" class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                            <label class="cursor-pointer flex items-center p-3 border border-gray-200 rounded-lg hover:bg-green-50 w-full sm:w-auto transition-colors">
+                                <input type="radio" name="konfirmasi" value="Sesuai" required class="w-5 h-5 text-green-600 focus:ring-green-500 border-gray-300">
+                                <span class="ml-3 font-medium text-gray-700">Ya, Data Sesuai</span>
+                            </label>
+                            <label class="cursor-pointer flex items-center p-3 border border-gray-200 rounded-lg hover:bg-red-50 w-full sm:w-auto transition-colors">
+                                <input type="radio" name="konfirmasi" value="Tidak Sesuai" class="w-5 h-5 text-red-600 focus:ring-red-500 border-gray-300">
+                                <span class="ml-3 font-medium text-gray-700">Tidak, Ada yang Salah</span>
+                            </label>
+                            
+                            <button type="submit" class="mt-4 sm:mt-0 ml-auto w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition-colors flex items-center justify-center">
+                                <i class="fas fa-paper-plane mr-2"></i> Kirim Konfirmasi
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. DASHBOARD ADMIN -->
+    <section id="dashboard-admin-section" class="hidden-section min-h-screen bg-gray-50">
+        <nav class="bg-gray-800 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-database text-white text-xl mr-3"></i>
+                        <span class="text-white font-semibold text-lg">Admin Panel</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="bukaModalPassword()" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            <i class="fas fa-key mr-1"></i> Ubah Password
+                        </button>
+                        <button onclick="logout()" class="text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-7xl mx-auto mt-8 px-4 sm:px-6 lg:px-8 pb-12">
+            <!-- Statistik Kategori (Bisa di Klik) -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div onclick="filterTabel('All')" class="cursor-pointer bg-white rounded-xl shadow-sm p-5 border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Total Data Siswa</p>
+                            <p class="text-2xl font-bold text-gray-900" id="stat-total">0</p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-full"><i class="fas fa-users text-blue-600"></i></div>
+                    </div>
+                </div>
+                <div onclick="filterTabel('Sesuai')" class="cursor-pointer bg-white rounded-xl shadow-sm p-5 border-l-4 border-green-500 hover:shadow-md transition-shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Data Sesuai</p>
+                            <p class="text-2xl font-bold text-gray-900" id="stat-sesuai">0</p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-full"><i class="fas fa-check-circle text-green-600"></i></div>
+                    </div>
+                </div>
+                <div onclick="filterTabel('Tidak Sesuai')" class="cursor-pointer bg-white rounded-xl shadow-sm p-5 border-l-4 border-red-500 hover:shadow-md transition-shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Tidak Sesuai</p>
+                            <p class="text-2xl font-bold text-gray-900" id="stat-tidak">0</p>
+                        </div>
+                        <div class="bg-red-100 p-3 rounded-full"><i class="fas fa-times-circle text-red-600"></i></div>
+                    </div>
+                </div>
+                <div onclick="filterTabel('Belum Konfirmasi')" class="cursor-pointer bg-white rounded-xl shadow-sm p-5 border-l-4 border-yellow-500 hover:shadow-md transition-shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Belum Konfirmasi</p>
+                            <p class="text-2xl font-bold text-gray-900" id="stat-belum">0</p>
+                        </div>
+                        <div class="bg-yellow-100 p-3 rounded-full"><i class="fas fa-clock text-yellow-600"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toolbar Aksi -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-wrap gap-3 justify-between items-center">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="bukaModalTambah()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-plus mr-1"></i> Tambah Manual
+                    </button>
+                    <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-file-excel mr-1"></i> Upload Excel (Kolektif)
+                        <input type="file" id="file-upload" accept=".xlsx, .xls" class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="downloadTemplate()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition border border-gray-300">
+                        <i class="fas fa-download mr-1"></i> Download Template
+                    </button>
+                    <button onclick="exportRekapan()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-file-export mr-1"></i> Cetak Rekapan Excel
+                    </button>
+                    <button onclick="muatDataAdmin()" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium transition" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabel Data -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="font-bold text-gray-800" id="judul-tabel">Menampilkan: Semua Data</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-xs font-semibold">
                             <tr>
-                                <th class="p-3 border-b">NISN</th>
-                                <th class="p-3 border-b">Nama Siswa</th>
-                                <th class="p-3 border-b text-center">Kelas</th>
-                                <th class="p-3 border-b text-center">Status</th>
-                                <th class="p-3 border-b text-center">Aksi</th>
+                                <th class="px-6 py-4">NISN</th>
+                                <th class="px-6 py-4">Nama Siswa</th>
+                                <th class="px-6 py-4">Tempat Lahir</th>
+                                <th class="px-6 py-4">Tanggal Lahir</th>
+                                <th class="px-6 py-4">Kelas</th>
+                                <th class="px-6 py-4 text-center">Status</th>
+                                <th class="px-6 py-4 text-center">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody id="admin-table-body">
-                            <!-- Rows dynamic -->
+                        <tbody id="tabel-body" class="divide-y divide-gray-200 bg-white">
+                            <!-- Baris Data Render via JS -->
                         </tbody>
                     </table>
                 </div>
+                <!-- Empty State -->
+                <div id="tabel-kosong" class="hidden py-12 text-center text-gray-500">
+                    <i class="fas fa-folder-open text-4xl mb-3 text-gray-300"></i>
+                    <p>Tidak ada data ditemukan.</p>
+                </div>
             </div>
         </div>
-    </script>
+    </section>
 
-    <!-- CORE LOGIC JS -->
+    <!-- MODAL EDIT / TAMBAH DATA (Hidden by default) -->
+    <div id="modal-form" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 py-4 bg-gray-800 text-white flex justify-between items-center">
+                <h3 id="modal-title" class="font-bold text-lg">Form Data Siswa</h3>
+                <button onclick="tutupModal('modal-form')" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="form-crud" class="p-6 space-y-4">
+                <input type="hidden" id="form-action-type"> <!-- 'add' or 'edit' -->
+                <input type="hidden" id="form-old-nisn">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">NISN</label>
+                    <input type="text" id="inp-nisn" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Nama Siswa</label>
+                    <input type="text" id="inp-nama" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tempat Lahir</label>
+                        <input type="text" id="inp-tempat" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tanggal Lahir (Teks)</label>
+                        <input type="text" id="inp-tanggal" placeholder="DD/MM/YYYY" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Kelas</label>
+                    <input type="text" id="inp-kelas" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                </div>
+                <div class="pt-4 flex justify-end space-x-3">
+                    <button type="button" onclick="tutupModal('modal-form')" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL UBAH PASSWORD ADMIN -->
+    <div id="modal-password" class="fixed inset-0 z-50 hidden bg-gray-900 bg-opacity-50 flex justify-center items-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div class="px-6 py-4 bg-gray-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg">Ubah Password Admin</h3>
+                <button onclick="tutupModal('modal-password')" class="text-gray-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <form id="form-password" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Password Lama</label>
+                    <input type="password" id="old-pass" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Password Baru</label>
+                    <input type="password" id="new-pass" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm">
+                </div>
+                <div class="pt-4 flex justify-end space-x-3">
+                    <button type="button" onclick="tutupModal('modal-password')" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
     <script>
-        window.onload = () => {
-            initApp();
-            blockDevTools();
-        };
-
-        function initApp() {
+        /* -------------------------------------------------------------
+           API & KONEKSI BACKEND MOCK (UNTUK PREVIEW)
+        ------------------------------------------------------------- */
+        async function fetchAPI(payload) {
             if (IS_PREVIEW) {
-                currentState.allStudents = [...DUMMY_DATA];
-                updateStats();
-            }
-            render();
-        }
-
-        function blockDevTools() {
-            // Anti F12 & Ctrl+Shift+I
-            document.onkeydown = function(e) {
-                if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74))) {
-                    return false;
+                // Simulasi Jeda Network
+                await new Promise(r => setTimeout(r, 800)); 
+                return await mockGAS(payload);
+            } else {
+                try {
+                    const response = await fetch(GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' } // Hindari preflight CORS
+                    });
+                    return await response.json();
+                } catch (err) {
+                    throw new Error("Gagal menghubungi server database.");
                 }
-            };
-        }
-
-        async function apiCall(action, data = {}) {
-            if (IS_PREVIEW) return { status: 'success', data: null }; // Mockup return
-
-            showLoading(true);
-            try {
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action, ...data })
-                });
-                const result = await response.json();
-                return result;
-            } catch (err) {
-                Swal.fire('Error', 'Gagal terhubung ke server', 'error');
-                return { status: 'error' };
-            } finally {
-                showLoading(false);
             }
         }
 
-        function navigateTo(view) {
-            currentState.view = view;
-            render();
-        }
+        // FUNGSI MOCK DATABASE LOKAL JIKA IS_PREVIEW = true
+        let mockDB = [
+            { NISN: "12345", Nama_Lengkap: "Budi Santoso", Tempat_Lahir: "Denpasar", Tanggal_Lahir: "15/08/2008", Kelas: "8A", Status_Konfirmasi: "Belum Konfirmasi" },
+            { NISN: "12346", Nama_Lengkap: "Siti Aminah", Tempat_Lahir: "Gianyar", Tanggal_Lahir: "22/11/2008", Kelas: "8B", Status_Konfirmasi: "Sesuai" },
+            { NISN: "12347", Nama_Lengkap: "Wayan Suardana", Tempat_Lahir: "Klungkung", Tanggal_Lahir: "05/01/2009", Kelas: "7C", Status_Konfirmasi: "Tidak Sesuai" }
+        ];
+        let mockAdminPass = "50102335";
 
-        function showLoading(show) {
-            document.getElementById('loading-overlay').classList.toggle('hidden', !show);
-        }
-
-        function render() {
-            const container = document.getElementById('main-content');
-            let html = '';
-
-            switch(currentState.view) {
-                case 'login':
-                    html = document.getElementById('tpl-login').innerHTML;
-                    break;
-                case 'admin-login':
-                    html = document.getElementById('tpl-admin-login').innerHTML;
-                    break;
-                case 'student-dash':
-                    let s = currentState.user;
-                    html = document.getElementById('tpl-student-dash').innerHTML
-                        .replace('{{nama}}', s.nama).replace('{{nisn}}', s.nisn)
-                        .replace('{{tempat}}', s.tempat).replace('{{tanggal}}', s.tanggal)
-                        .replace('{{kelas}}', s.kelas)
-                        .replace('{{check_sesuai}}', s.status === 'Sesuai' ? 'checked' : '')
-                        .replace('{{check_tidak}}', s.status === 'Tidak Sesuai' ? 'checked' : '');
-                    break;
-                case 'admin-dash':
-                    html = document.getElementById('tpl-admin-dash').innerHTML
-                        .replace('{{total}}', currentState.stats.total)
-                        .replace('{{sesuai}}', currentState.stats.sesuai)
-                        .replace('{{tidak}}', currentState.stats.tidak)
-                        .replace('{{belum}}', currentState.stats.belum);
-                    break;
+        async function mockGAS(payload) {
+            const act = payload.action;
+            if (act === 'loginSiswa') {
+                if (payload.nisn !== payload.password) return { status: 'error', message: 'NISN tidak valid' };
+                const user = mockDB.find(u => u.NISN === payload.nisn);
+                return user ? { status: 'success', data: user } : { status: 'error', message: 'Data tidak ditemukan' };
             }
-
-            container.innerHTML = html;
-            if (currentState.view === 'admin-dash') populateAdminTable();
-        }
-
-        // --- AUTH LOGIC ---
-        function handleLogin() {
-            const user = document.getElementById('login-user').value;
-            const pass = document.getElementById('login-pass').value;
-
-            if (IS_PREVIEW) {
-                const student = currentState.allStudents.find(s => s.nisn === user && s.nisn === pass);
-                if (student) {
-                    currentState.user = {...student};
-                    Swal.fire({ icon: 'success', title: 'Berhasil Masuk!', text: 'Halo ' + student.nama, timer: 1500, showConfirmButton: false });
-                    navigateTo('student-dash');
+            if (act === 'loginAdmin') {
+                return payload.password === mockAdminPass ? { status: 'success' } : { status: 'error', message: 'Password Admin Salah!' };
+            }
+            if (act === 'getAllData') return { status: 'success', data: mockDB };
+            if (act === 'konfirmasiSiswa') {
+                const idx = mockDB.findIndex(u => u.NISN === payload.nisn);
+                if (idx > -1) mockDB[idx].Status_Konfirmasi = payload.statusKonf;
+                return { status: 'success' };
+            }
+            if (act === 'addSiswaSingle' || act === 'editSiswa') {
+                const dataBaru = { NISN: payload.nisn, Nama_Lengkap: payload.nama, Tempat_Lahir: payload.tempat, Tanggal_Lahir: payload.tanggal, Kelas: payload.kelas, Status_Konfirmasi: "Belum Konfirmasi" };
+                if (act === 'editSiswa') {
+                    const idx = mockDB.findIndex(u => u.NISN === payload.oldNisn);
+                    if (idx > -1) mockDB[idx] = { ...mockDB[idx], ...dataBaru, Status_Konfirmasi: mockDB[idx].Status_Konfirmasi };
                 } else {
-                    Swal.fire('Gagal', 'Username atau Password salah!', 'error');
+                    if (mockDB.find(u => u.NISN === payload.nisn)) return { status: 'error', message: 'NISN sudah terdaftar!' };
+                    mockDB.push(dataBaru);
                 }
-            } else {
-                // Real Login GAS Call
+                return { status: 'success' };
+            }
+            if (act === 'deleteSiswa') {
+                mockDB = mockDB.filter(u => u.NISN !== payload.nisn);
+                return { status: 'success' };
+            }
+            if (act === 'addSiswaBulk') {
+                payload.data.forEach(d => {
+                    if (!mockDB.find(u => u.NISN === d.NISN)) {
+                        mockDB.push({ NISN: d.NISN, Nama_Lengkap: d.Nama_Lengkap, Tempat_Lahir: d.Tempat_Lahir, Tanggal_Lahir: d.Tanggal_Lahir, Kelas: d.Kelas, Status_Konfirmasi: "Belum Konfirmasi" });
+                    }
+                });
+                return { status: 'success' };
+            }
+            if (act === 'changeAdminPassword') {
+                if (payload.oldPass === mockAdminPass) {
+                    mockAdminPass = payload.newPass;
+                    return { status: 'success' };
+                }
+                return { status: 'error', message: 'Password Lama Salah!' };
             }
         }
 
-        function handleAdminLogin() {
-            const pass = document.getElementById('admin-pass').value;
-            if (pass === DUMMY_ADMIN_PASS) {
-                Swal.fire({ icon: 'success', title: 'Akses Diterima!', text: 'Selamat Datang Pak Andhi!', timer: 1500, showConfirmButton: false });
-                navigateTo('admin-dash');
-            } else {
-                Swal.fire('Waduh...', 'Passwordnya salah tuh Pak!', 'warning');
-            }
+        /* -------------------------------------------------------------
+           UI & NAVIGATION
+        ------------------------------------------------------------- */
+        function switchView(sectionId) {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden-section'));
+            document.getElementById(sectionId).classList.remove('hidden-section');
+        }
+
+        function notif(icon, title, text = "") {
+            Swal.fire({ icon, title, text, confirmButtonColor: '#2563eb' });
+        }
+
+        function loading(title) {
+            Swal.fire({ title, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         }
 
         function logout() {
-            currentState.user = null;
-            navigateTo('login');
-            Swal.fire('Sesi Berakhir', 'Anda telah keluar sistem', 'info');
-        }
-
-        // --- STUDENT ACTIONS ---
-        function submitKonfirmasi() {
-            const val = document.querySelector('input[name="confirm"]:checked');
-            if (!val) return Swal.fire('Peringatan', 'Pilih status konfirmasi dulu!', 'warning');
-            
-            currentState.user.status = val.value;
-            // Update in local data
-            const idx = currentState.allStudents.findIndex(x => x.nisn === currentState.user.nisn);
-            if(idx > -1) currentState.allStudents[idx].status = val.value;
-            
-            updateStats();
-            Swal.fire('Berhasil', 'Konfirmasi data telah disimpan', 'success');
-        }
-
-        // --- ADMIN ACTIONS ---
-        function updateStats() {
-            const d = currentState.allStudents;
-            currentState.stats = {
-                total: d.length,
-                sesuai: d.filter(x => x.status === 'Sesuai').length,
-                tidak: d.filter(x => x.status === 'Tidak Sesuai').length,
-                belum: d.filter(x => x.status === 'Belum').length
-            };
-        }
-
-        function populateAdminTable(filter = 'Semua') {
-            const tbody = document.getElementById('admin-table-body');
-            let data = currentState.allStudents;
-            
-            if (filter !== 'Semua') {
-                data = data.filter(s => s.status === filter);
-            }
-
-            tbody.innerHTML = data.map(s => `
-                <tr class="hover:bg-gray-50 border-b transition-colors">
-                    <td class="p-3 font-medium text-blue-600">${s.nisn}</td>
-                    <td class="p-3">${s.nama}</td>
-                    <td class="p-3 text-center">${s.kelas}</td>
-                    <td class="p-3 text-center">
-                        <span class="px-3 py-1 rounded-full text-xs font-bold ${
-                            s.status === 'Sesuai' ? 'bg-green-100 text-green-700' : 
-                            s.status === 'Tidak Sesuai' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                        }">${s.status}</span>
-                    </td>
-                    <td class="p-3 text-center flex justify-center gap-2">
-                        <button onclick="editSiswa('${s.nisn}')" class="p-1 text-blue-500 hover:text-blue-700">✏️</button>
-                        <button onclick="deleteSiswa('${s.nisn}')" class="p-1 text-red-500 hover:text-red-700">🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function filterData(f) {
-            populateAdminTable(f);
-        }
-
-        function deleteSiswa(nisn) {
             Swal.fire({
-                title: 'Yakin hapus?',
-                text: "Data siswa dengan NISN " + nisn + " akan dihapus permanen",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Ya, Hapus!'
+                title: 'Keluar?', text: "Sesi Anda akan diakhiri.", icon: 'warning',
+                showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#6b7280', confirmButtonText: 'Ya, Logout!'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    currentState.allStudents = currentState.allStudents.filter(s => s.nisn !== nisn);
-                    updateStats();
-                    render();
-                    Swal.fire('Terhapus!', 'Data siswa telah dihapus.', 'success');
+                    currentRole = null;
+                    currentUserData = null;
+                    document.getElementById('form-login-siswa').reset();
+                    document.getElementById('form-login-admin').reset();
+                    switchView('login-siswa-section');
+                    notif('success', 'Berhasil Logout', 'Sampai jumpa kembali!');
                 }
             });
         }
 
-        function showAddModal() {
-            Swal.fire({
-                title: 'Tambah Siswa Baru',
-                html: `
-                    <input id="swal-nisn" class="swal2-input" placeholder="NISN">
-                    <input id="swal-nama" class="swal2-input" placeholder="Nama Lengkap">
-                    <input id="swal-tempat" class="swal2-input" placeholder="Tempat Lahir">
-                    <input id="swal-tgl" class="swal2-input" type="date">
-                    <input id="swal-kelas" class="swal2-input" placeholder="Kelas">
-                `,
-                confirmButtonText: 'Simpan Data',
-                showCancelButton: true,
-                preConfirm: () => {
-                    return {
-                        nisn: document.getElementById('swal-nisn').value,
-                        nama: document.getElementById('swal-nama').value,
-                        tempat: document.getElementById('swal-tempat').value,
-                        tanggal: document.getElementById('swal-tgl').value,
-                        kelas: document.getElementById('swal-kelas').value,
-                        status: 'Belum'
-                    }
+        /* -------------------------------------------------------------
+           LOGIN LOGIC
+        ------------------------------------------------------------- */
+        document.getElementById('form-login-siswa').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('siswa-user').value.trim();
+            const pass = document.getElementById('siswa-pass').value.trim();
+            
+            if (user !== pass) {
+                return notif('error', 'Login Gagal', 'Username dan Password (NISN) harus sama persis.');
+            }
+
+            loading('Sedang Memverifikasi...');
+            try {
+                const res = await fetchAPI({ action: 'loginSiswa', nisn: user, password: pass });
+                if (res.status === 'success') {
+                    currentRole = 'Siswa';
+                    currentUserData = res.data;
+                    renderDashboardSiswa();
+                    switchView('dashboard-siswa-section');
+                    Swal.close();
+                    
+                    Swal.fire({
+                        toast: true, position: 'top-end', icon: 'success', title: `Halo, ${currentUserData.Nama_Lengkap}!`, showConfirmButton: false, timer: 3000
+                    });
+                } else {
+                    notif('error', 'Gagal', res.message);
                 }
-            }).then((res) => {
-                if (res.isConfirmed) {
-                    currentState.allStudents.push(res.value);
-                    updateStats();
-                    render();
-                    Swal.fire('Berhasil', 'Siswa baru ditambahkan', 'success');
+            } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+        });
+
+        document.getElementById('form-login-admin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('admin-pass').value.trim();
+            
+            loading('Membuka Akses...');
+            try {
+                const res = await fetchAPI({ action: 'loginAdmin', password: pass });
+                if (res.status === 'success') {
+                    currentRole = 'Admin';
+                    document.getElementById('admin-pass').value = '';
+                    switchView('dashboard-admin-section');
+                    muatDataAdmin();
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Selamat bekerja, Pak Andhi!', showConfirmButton: false, timer: 3000 });
+                } else {
+                    notif('error', 'Akses Ditolak', res.message);
+                }
+            } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+        });
+
+        /* -------------------------------------------------------------
+           SISWA LOGIC
+        ------------------------------------------------------------- */
+        function renderDashboardSiswa() {
+            document.getElementById('ds-nisn').textContent = currentUserData.NISN;
+            document.getElementById('ds-nama').textContent = currentUserData.Nama_Lengkap;
+            document.getElementById('ds-tempat').textContent = currentUserData.Tempat_Lahir;
+            document.getElementById('ds-tanggal').textContent = currentUserData.Tanggal_Lahir;
+            document.getElementById('ds-kelas').textContent = currentUserData.Kelas;
+            
+            const badge = document.getElementById('ds-status');
+            badge.textContent = currentUserData.Status_Konfirmasi;
+            badge.className = 'mt-1 inline-block px-3 py-1 text-xs font-semibold rounded-full ' + getStatusColor(currentUserData.Status_Konfirmasi);
+        }
+
+        document.getElementById('form-konfirmasi').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const val = document.querySelector('input[name="konfirmasi"]:checked').value;
+            
+            Swal.fire({
+                title: 'Simpan Konfirmasi?', text: `Anda menyatakan data ${val}`, icon: 'question',
+                showCancelButton: true, confirmButtonColor: '#2563eb', confirmButtonText: 'Ya, Simpan!'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    loading('Menyimpan ke Server...');
+                    try {
+                        const res = await fetchAPI({ action: 'konfirmasiSiswa', nisn: currentUserData.NISN, statusKonf: val });
+                        if (res.status === 'success') {
+                            currentUserData.Status_Konfirmasi = val;
+                            renderDashboardSiswa();
+                            notif('success', 'Terima Kasih', 'Konfirmasi data berhasil disimpan.');
+                        } else { notif('error', 'Gagal', 'Terjadi kesalahan sistem.'); }
+                    } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
                 }
             });
+        });
+
+        /* -------------------------------------------------------------
+           ADMIN LOGIC
+        ------------------------------------------------------------- */
+        async function muatDataAdmin() {
+            loading('Mengambil Data Siswa...');
+            try {
+                const res = await fetchAPI({ action: 'getAllData' });
+                if (res.status === 'success') {
+                    allSiswaData = res.data;
+                    updateStatistik();
+                    filterTabel(currentFilter);
+                    Swal.close();
+                } else { notif('error', 'Gagal', 'Gagal memuat data'); }
+            } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+        }
+
+        function updateStatistik() {
+            let t = allSiswaData.length;
+            let s = allSiswaData.filter(d => d.Status_Konfirmasi === 'Sesuai').length;
+            let ts = allSiswaData.filter(d => d.Status_Konfirmasi === 'Tidak Sesuai').length;
+            let b = allSiswaData.filter(d => d.Status_Konfirmasi === 'Belum Konfirmasi').length;
+            
+            document.getElementById('stat-total').textContent = t;
+            document.getElementById('stat-sesuai').textContent = s;
+            document.getElementById('stat-tidak').textContent = ts;
+            document.getElementById('stat-belum').textContent = b;
+        }
+
+        function filterTabel(filter) {
+            currentFilter = filter;
+            document.getElementById('judul-tabel').textContent = `Menampilkan: ${filter === 'All' ? 'Semua Data' : 'Data ' + filter}`;
+            
+            let dataToShow = filter === 'All' ? allSiswaData : allSiswaData.filter(d => d.Status_Konfirmasi === filter);
+            const tbody = document.getElementById('tabel-body');
+            tbody.innerHTML = '';
+            
+            if (dataToShow.length === 0) {
+                document.getElementById('tabel-kosong').classList.remove('hidden');
+            } else {
+                document.getElementById('tabel-kosong').classList.add('hidden');
+                dataToShow.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-blue-50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-medium">${row.NISN}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-700">${row.Nama_Lengkap}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.Tempat_Lahir}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.Tanggal_Lahir}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.Kelas}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(row.Status_Konfirmasi)}">
+                                ${row.Status_Konfirmasi}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <button onclick="editSiswa('${row.NISN}')" class="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button onclick="hapusSiswa('${row.NISN}')" class="text-red-600 hover:text-red-900" title="Hapus"><i class="fas fa-trash-alt"></i></button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function getStatusColor(status) {
+            if (status === 'Sesuai') return 'bg-green-100 text-green-800 border border-green-200';
+            if (status === 'Tidak Sesuai') return 'bg-red-100 text-red-800 border border-red-200';
+            return 'bg-gray-100 text-gray-800 border border-gray-200';
+        }
+
+        /* -------------------------------------------------------------
+           MODALS & CRUD MANUAL
+        ------------------------------------------------------------- */
+        function bukaModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function tutupModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function bukaModalTambah() {
+            document.getElementById('form-crud').reset();
+            document.getElementById('form-action-type').value = 'add';
+            document.getElementById('modal-title').textContent = 'Tambah Data Siswa Baru';
+            document.getElementById('inp-nisn').readOnly = false;
+            bukaModal('modal-form');
         }
 
         function editSiswa(nisn) {
-            const s = currentState.allStudents.find(x => x.nisn === nisn);
-            Swal.fire({
-                title: 'Edit Data Siswa',
-                html: `
-                    <input id="swal-nisn" class="swal2-input" value="${s.nisn}" readonly>
-                    <input id="swal-nama" class="swal2-input" value="${s.nama}">
-                    <input id="swal-tempat" class="swal2-input" value="${s.tempat}">
-                    <input id="swal-tgl" class="swal2-input" type="date" value="${s.tanggal}">
-                    <input id="swal-kelas" class="swal2-input" value="${s.kelas}">
-                `,
-                confirmButtonText: 'Update Data',
-                showCancelButton: true,
-                preConfirm: () => {
-                    return {
-                        nisn: s.nisn,
-                        nama: document.getElementById('swal-nama').value,
-                        tempat: document.getElementById('swal-tempat').value,
-                        tanggal: document.getElementById('swal-tgl').value,
-                        kelas: document.getElementById('swal-kelas').value,
-                        status: s.status
-                    }
-                }
-            }).then((res) => {
-                if (res.isConfirmed) {
-                    const idx = currentState.allStudents.findIndex(x => x.nisn === nisn);
-                    currentState.allStudents[idx] = res.value;
-                    render();
-                    Swal.fire('Diperbarui', 'Data berhasil diubah', 'success');
-                }
-            });
+            const row = allSiswaData.find(d => d.NISN === nisn);
+            if (!row) return;
+            document.getElementById('form-action-type').value = 'edit';
+            document.getElementById('form-old-nisn').value = row.NISN;
+            document.getElementById('modal-title').textContent = 'Edit Data Siswa';
+            
+            document.getElementById('inp-nisn').value = row.NISN;
+            document.getElementById('inp-nama').value = row.Nama_Lengkap;
+            document.getElementById('inp-tempat').value = row.Tempat_Lahir;
+            document.getElementById('inp-tanggal').value = row.Tanggal_Lahir;
+            document.getElementById('inp-kelas').value = row.Kelas;
+            
+            // NISN bisa diedit, tapi disarankan readOnly jika PK ketat. Untuk request ini, biarkan bisa diedit namun record dicari via old-nisn.
+            bukaModal('modal-form');
         }
 
-        function showImportModal() {
-            Swal.fire({
-                title: 'Import Kolektif (Excel)',
-                html: `
-                    <p class="text-xs text-gray-500 mb-4">Pilih file excel dengan kolom: NISN, Nama Siswa, Tempat Lahir, Tanggal Lahir, Kelas</p>
-                    <input type="file" id="excel-file" accept=".xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <button onclick="downloadTemplate()" class="mt-4 text-xs text-blue-600 underline">Download Template .xlsx</button>
-                `,
-                confirmButtonText: 'Proses Import',
-                showCancelButton: true,
-                preConfirm: () => {
-                    const file = document.getElementById('excel-file').files[0];
-                    if(!file) { Swal.showValidationMessage('Pilih file dulu!'); return; }
-                    return file;
-                }
-            }).then((res) => {
-                if(res.isConfirmed) processExcel(res.value);
-            });
-        }
-
-        function downloadTemplate() {
-            const ws = XLSX.utils.aoa_to_sheet([["NISN", "Nama Siswa", "Tempat Lahir", "Tanggal Lahir", "Kelas"]]);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Siswa");
-            XLSX.writeFile(wb, "Template_Data_Siswa.xlsx");
-        }
-
-        function processExcel(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet);
-                
-                // Map to our structure
-                const newStudents = rows.map(r => ({
-                    nisn: String(r['NISN'] || ''),
-                    nama: r['Nama Siswa'] || '',
-                    tempat: r['Tempat Lahir'] || '',
-                    tanggal: r['Tanggal Lahir'] || '',
-                    kelas: r['Kelas'] || '',
-                    status: 'Belum'
-                }));
-
-                currentState.allStudents = [...currentState.allStudents, ...newStudents];
-                updateStats();
-                render();
-                Swal.fire('Sukses', `Berhasil mengimport ${newStudents.length} data siswa`, 'success');
+        document.getElementById('form-crud').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const actType = document.getElementById('form-action-type').value;
+            const payload = {
+                action: actType === 'add' ? 'addSiswaSingle' : 'editSiswa',
+                oldNisn: document.getElementById('form-old-nisn').value,
+                nisn: document.getElementById('inp-nisn').value,
+                nama: document.getElementById('inp-nama').value,
+                tempat: document.getElementById('inp-tempat').value,
+                tanggal: document.getElementById('inp-tanggal').value,
+                kelas: document.getElementById('inp-kelas').value
             };
-            reader.readAsArrayBuffer(file);
-        }
 
-        function exportExcel() {
-            const ws = XLSX.utils.json_to_sheet(currentState.allStudents);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Rekap Data");
-            XLSX.writeFile(wb, "Rekap_Konfirmasi_Siswa.xlsx");
-            Swal.fire('Download', 'Rekapitulasi Excel siap diunduh', 'success');
-        }
+            loading('Menyimpan Data...');
+            try {
+                const res = await fetchAPI(payload);
+                if (res.status === 'success') {
+                    tutupModal('modal-form');
+                    notif('success', 'Berhasil', 'Data berhasil disimpan!');
+                    muatDataAdmin();
+                } else { notif('error', 'Gagal', res.message); }
+            } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+        });
 
-        function showSettingsModal() {
+        function hapusSiswa(nisn) {
             Swal.fire({
-                title: 'Pengaturan Admin',
-                html: `
-                    <div class="text-left">
-                        <label class="text-xs font-bold">PASSWORD BARU PAK ANDHI</label>
-                        <input id="new-admin-pass" type="password" class="swal2-input" placeholder="Password baru">
-                    </div>
-                `,
-                confirmButtonText: 'Simpan Password',
-                showCancelButton: true
-            }).then(res => {
-                if(res.isConfirmed) {
-                    Swal.fire('Tersimpan', 'Password admin berhasil diubah', 'success');
+                title: 'Hapus Data?', text: "Data ini akan dihapus permanen!", icon: 'warning',
+                showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus!'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    loading('Menghapus Data...');
+                    try {
+                        const res = await fetchAPI({ action: 'deleteSiswa', nisn: nisn });
+                        if (res.status === 'success') {
+                            notif('success', 'Terhapus', 'Data siswa berhasil dihapus.');
+                            muatDataAdmin();
+                        } else { notif('error', 'Gagal', 'Tidak dapat menghapus data.'); }
+                    } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
                 }
-            })
+            });
         }
+
+        /* -------------------------------------------------------------
+           EXCEL UPLOAD & DOWNLOAD
+        ------------------------------------------------------------- */
+        function downloadTemplate() {
+            const data = [{ "NISN": "12345", "Nama Siswa": "Contoh Siswa", "Tempat Lahir": "Denpasar", "Tanggal Lahir": "15/08/2010", "Kelas": "7A" }];
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Template");
+            XLSX.writeFile(wb, "Template_Upload_Siswa.xlsx");
+        }
+
+        function exportRekapan() {
+            if(allSiswaData.length === 0) return notif('warning', 'Kosong', 'Tidak ada data untuk diekspor');
+            const dataToExport = (currentFilter === 'All' ? allSiswaData : allSiswaData.filter(d => d.Status_Konfirmasi === currentFilter)).map(d => ({
+                "NISN": d.NISN, "Nama Lengkap": d.Nama_Lengkap, "Tempat Lahir": d.Tempat_Lahir, 
+                "Tanggal Lahir": d.Tanggal_Lahir, "Kelas": d.Kelas, "Status Konfirmasi": d.Status_Konfirmasi
+            }));
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Rekapan Siswa");
+            XLSX.writeFile(wb, `Rekapan_Siswa_${currentFilter}_${new Date().getTime()}.xlsx`);
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = evt.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheet = workbook.SheetNames[0];
+                const excelRows = XLSX.utils.sheet_to_row_object_array(workbook.Sheets[firstSheet]);
+                
+                if (excelRows.length === 0) return notif('error', 'File Kosong', 'Tidak ada data di file ini.');
+                
+                // Mapping dan validasi format kolom
+                const payloadData = excelRows.map(r => ({
+                    NISN: String(r["NISN"] || ""),
+                    Nama_Lengkap: String(r["Nama Siswa"] || r["Nama_Siswa"] || ""),
+                    Tempat_Lahir: String(r["Tempat Lahir"] || r["Tempat_Lahir"] || ""),
+                    Tanggal_Lahir: String(r["Tanggal Lahir"] || r["Tanggal_Lahir"] || ""),
+                    Kelas: String(r["Kelas"] || "")
+                })).filter(r => r.NISN.trim() !== ""); // Filter out empty rows
+
+                if(payloadData.length === 0) return notif('error', 'Format Salah', 'Pastikan nama kolom sesuai template!');
+
+                Swal.fire({
+                    title: 'Upload Kolektif', text: `Ditemukan ${payloadData.length} data. Upload sekarang?`, icon: 'info',
+                    showCancelButton: true, confirmButtonText: 'Upload!'
+                }).then(async (res) => {
+                    if (res.isConfirmed) {
+                        loading('Sedang Mengupload...');
+                        try {
+                            const result = await fetchAPI({ action: 'addSiswaBulk', data: payloadData });
+                            if (result.status === 'success') {
+                                document.getElementById('file-upload').value = '';
+                                notif('success', 'Upload Berhasil', `${payloadData.length} data berhasil ditambahkan.`);
+                                muatDataAdmin();
+                            } else { notif('error', 'Gagal Upload', result.message); }
+                        } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+                    }
+                });
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        /* -------------------------------------------------------------
+           SETTING ADMIN PASSWORD
+        ------------------------------------------------------------- */
+        function bukaModalPassword() {
+            document.getElementById('form-password').reset();
+            bukaModal('modal-password');
+        }
+
+        document.getElementById('form-password').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const oldP = document.getElementById('old-pass').value;
+            const newP = document.getElementById('new-pass').value;
+            
+            loading('Memproses...');
+            try {
+                const res = await fetchAPI({ action: 'changeAdminPassword', oldPass: oldP, newPass: newP });
+                if (res.status === 'success') {
+                    tutupModal('modal-password');
+                    notif('success', 'Berhasil', 'Password Admin telah diubah.');
+                } else { notif('error', 'Gagal', res.message); }
+            } catch (err) { notif('error', 'Koneksi Gagal', err.message); }
+        });
+
     </script>
 </body>
 </html>
