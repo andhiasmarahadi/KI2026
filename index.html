@@ -3,296 +3,658 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Verifikasi Siswa - SMPN 1 Dawan</title>
+    <title>Sistem Verifikasi Data Siswa - SMPN 1 Dawan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; user-select: none; }
-        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1); }
-        .btn-primary { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; transition: all 0.3s ease; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #ffffff; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #toast { position: fixed; bottom: 20px; right: 20px; padding: 1rem 2rem; border-radius: 0.5rem; color: white; z-index: 10001; transform: translateY(150%); transition: transform 0.3s ease; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f3f4f6;
+            user-select: none; /* Anti Copy */
+        }
+
+        .glass-morphism {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .loader {
+            border-top-color: #3b82f6;
+            animation: spinner 1.5s linear infinite;
+        }
+
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Anti Inspect Element Overlay */
+        #security-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black; color: white;
+            z-index: 9999; justify-content: center; align-items: center;
+            text-align: center; font-size: 1.5rem;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
 
-    <div id="toast"></div>
+    <!-- Security Overlay -->
+    <div id="security-overlay">Akses Dilarang! Keamanan Aktif.</div>
 
-    <header class="w-full py-8 flex flex-col items-center">
-        <img src="https://i.ibb.co.com/DPQsmGBk/logo-smp.png" alt="Logo" class="h-20 mb-3">
-        <h1 class="text-2xl font-bold text-blue-900 text-center px-4">SMP NEGERI 1 DAWAN</h1>
-        <p class="text-gray-500">Verifikasi Data Mandiri</p>
-    </header>
-
-    <main class="container mx-auto px-4 pb-20">
-        <!-- TAMPILAN LOGIN -->
-        <section id="view-login" class="max-w-md mx-auto mt-6">
-            <div class="glass-card p-8">
-                <h2 class="text-xl font-bold text-center mb-6 text-gray-800">Login Siswa</h2>
-                <div class="space-y-4">
-                    <input type="text" id="siswa-user" class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Masukkan NISN">
-                    <input type="password" id="siswa-pass" class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password (NISN)">
-                    <button onclick="loginSiswa()" id="btn-login-siswa" class="w-full btn-primary py-3 rounded-lg font-bold">MASUK</button>
-                </div>
-                <div class="mt-8 pt-6 border-t text-center">
-                    <button onclick="showAdminGate()" class="text-sm text-blue-600 font-medium hover:underline">Masuk sebagai Admin</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- ADMIN GATE -->
-        <section id="view-admin-gate" class="hidden max-w-md mx-auto mt-6">
-            <div class="glass-card p-8 border-2 border-blue-100">
-                <h2 class="text-lg font-bold text-center mb-4 italic text-blue-800">"Selamat Datang Pak Andhi"</h2>
-                <input type="password" id="admin-pass" class="w-full p-3 border rounded-lg mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password Admin">
-                <button onclick="loginAdmin()" id="btn-login-admin" class="w-full bg-blue-800 text-white py-3 rounded-lg font-bold">BUKA DASHBOARD</button>
-                <button onclick="showView('view-login')" class="w-full text-sm text-gray-500 py-2 mt-4">Kembali</button>
-            </div>
-        </section>
-
-        <!-- DASHBOARD SISWA -->
-        <section id="view-dash-siswa" class="hidden max-w-2xl mx-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="font-bold text-gray-700 uppercase tracking-wider">Data Profil Anda</h2>
-                <button onclick="location.reload()" class="text-red-500 font-bold px-3 py-1 rounded">Keluar</button>
-            </div>
-            <div class="glass-card overflow-hidden">
-                <div id="siswa-content" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                <div class="p-6 bg-blue-50 border-t">
-                    <p class="font-bold mb-3 text-blue-900">Apakah data di atas sudah benar?</p>
-                    <div class="flex flex-col gap-2">
-                        <label class="flex items-center gap-2 bg-white p-3 rounded border cursor-pointer">
-                            <input type="radio" name="konf" value="Sesuai"> <span class="text-green-700 font-medium">Sudah Sesuai</span>
-                        </label>
-                        <label class="flex items-center gap-2 bg-white p-3 rounded border cursor-pointer">
-                            <input type="radio" name="konf" value="Tidak Sesuai"> <span class="text-red-700 font-medium">Belum Sesuai (Ada Kesalahan)</span>
-                        </label>
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-blue-800 text-white p-4 shadow-lg">
+            <div class="container mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <img src="https://i.ibb.co/DPQsmGBk/logo-smp.png" alt="Logo SMPN 1 Dawan" class="h-12 w-12 object-contain bg-white rounded-full p-1" onerror="this.src='https://via.placeholder.com/50?text=SMP'">
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight text-white">SMP NEGERI 1 DAWAN</h1>
+                        <p class="text-xs text-blue-200">Sistem Verifikasi Data Siswa</p>
                     </div>
-                    <button onclick="submitSiswa()" id="btn-konf" class="w-full btn-primary py-3 rounded-lg mt-4 font-bold shadow-lg">KIRIM KONFIRMASI</button>
+                </div>
+                <div id="user-info" class="hidden flex items-center gap-4">
+                    <span id="display-name" class="text-sm font-medium"></span>
+                    <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-xs transition">Logout</button>
                 </div>
             </div>
-        </section>
+        </header>
 
-        <!-- DASHBOARD ADMIN -->
-        <section id="view-dash-admin" class="hidden">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <h1 class="text-2xl font-bold text-blue-900">Dashboard Admin</h1>
-                <div class="flex gap-2">
-                    <button onclick="showView('view-import')" class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold">Import Excel</button>
-                    <button onclick="location.reload()" class="bg-red-500 text-white px-4 py-2 rounded text-sm font-bold">Logout</button>
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto p-4 md:p-8">
+            
+            <!-- 1. LOGIN SISWA PAGE -->
+            <div id="page-login-siswa" class="max-w-md mx-auto mt-10 space-y-6">
+                <div class="glass-morphism p-8 rounded-2xl shadow-xl border border-blue-100">
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-bold text-gray-800">Login Siswa</h2>
+                        <p class="text-sm text-gray-500 mt-2">Silakan masukkan data NISN Anda</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                            <input type="text" id="siswa-user" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" autocomplete="off">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <input type="password" id="siswa-pass" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" autocomplete="off">
+                        </div>
+                        <button onclick="loginSiswa()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow-md">Masuk</button>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <button onclick="showAdminLogin()" class="text-blue-600 hover:underline text-sm font-medium">Halaman Untuk Pak Andhi</button>
                 </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div class="glass-card p-4 border-l-4 border-blue-500"><p class="text-xs">Total</p><h3 id="st-total" class="text-xl font-bold">0</h3></div>
-                <div class="glass-card p-4 border-l-4 border-green-500"><p class="text-xs">Sesuai</p><h3 id="st-sesuai" class="text-xl font-bold">0</h3></div>
-                <div class="glass-card p-4 border-l-4 border-red-500"><p class="text-xs">Salah</p><h3 id="st-salah" class="text-xl font-bold">0</h3></div>
-                <div class="glass-card p-4 border-l-4 border-yellow-500"><p class="text-xs">Belum</p><h3 id="st-belum" class="text-xl font-bold">0</h3></div>
-            </div>
-            <div class="glass-card overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50 border-b">
-                            <tr>
-                                <th class="p-4 text-xs font-bold text-gray-500">NISN</th>
-                                <th class="p-4 text-xs font-bold text-gray-500">Nama</th>
-                                <th class="p-4 text-xs font-bold text-gray-500">Kelas</th>
-                                <th class="p-4 text-xs font-bold text-gray-500 text-center">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-table" class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
 
-        <!-- VIEW IMPORT -->
-        <section id="view-import" class="hidden max-w-md mx-auto">
-            <div class="glass-card p-8">
-                <h2 class="font-bold mb-4 text-lg text-blue-900 text-center">Import Data</h2>
-                <div class="border-2 border-dashed border-blue-200 rounded-lg p-6 text-center mb-4">
-                    <input type="file" id="file-excel" class="block w-full text-sm">
+            <!-- 2. LOGIN ADMIN PAGE -->
+            <div id="page-login-admin" class="hidden max-w-md mx-auto mt-10">
+                <div class="glass-morphism p-8 rounded-2xl shadow-xl text-center border border-yellow-100">
+                    <div class="mb-6">
+                        <i class="fas fa-user-shield text-5xl text-yellow-500 mb-4"></i>
+                        <h2 class="text-xl font-bold text-gray-800">Selamat Datang Pak Andhi Ganteng</h2>
+                        <p class="text-sm text-gray-500 mt-2">Masukin Passwordnya dulu donk :D</p>
+                    </div>
+                    <div class="space-y-4">
+                        <input type="password" id="admin-pass" placeholder="Password Admin" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none transition text-center">
+                        <div class="flex gap-2">
+                            <button onclick="backToLogin()" class="w-1/3 bg-gray-200 hover:bg-gray-300 py-3 rounded-lg font-medium transition">Kembali</button>
+                            <button onclick="loginAdmin()" class="w-2/3 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-lg transition shadow-md">Buka Dashboard</button>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="doImport()" id="btn-imp" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">MULAI UPLOAD</button>
-                <button onclick="showView('view-dash-admin')" class="w-full py-2 text-gray-500 mt-2 text-sm">Batal</button>
             </div>
-        </section>
-    </main>
 
-    <footer class="text-center py-6 text-gray-400 text-xs mt-10">
-        &copy; 2024 SMP Negeri 1 Dawan.
-    </footer>
+            <!-- 3. DASHBOARD SISWA -->
+            <div id="page-dashboard-siswa" class="hidden max-w-2xl mx-auto">
+                <div class="glass-morphism p-8 rounded-2xl shadow-xl border-t-4 border-blue-600">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <i class="fas fa-id-card text-blue-600"></i> Data Profil Anda
+                    </h2>
+                    <div id="siswa-data-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <!-- Content via JS -->
+                    </div>
+                    <hr class="my-6">
+                    <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                        <p class="font-semibold text-gray-800 mb-4">Apakah data di atas sudah benar dan sesuai?</p>
+                        <div class="flex flex-col gap-3">
+                            <label class="flex items-center gap-3 p-3 bg-white rounded-lg border cursor-pointer hover:bg-green-50 transition">
+                                <input type="radio" name="konfirmasi" value="Sesuai" class="w-4 h-4 text-green-600">
+                                <span class="text-gray-700 font-medium text-green-700">Ya, Data Sudah Sesuai</span>
+                            </label>
+                            <label class="flex items-center gap-3 p-3 bg-white rounded-lg border cursor-pointer hover:bg-red-50 transition">
+                                <input type="radio" name="konfirmasi" value="Tidak Sesuai" class="w-4 h-4 text-red-600">
+                                <span class="text-gray-700 font-medium text-red-700">Tidak, Ada Data Yang Salah</span>
+                            </label>
+                        </div>
+                        <button onclick="submitKonfirmasi()" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition shadow-lg">Kirim Konfirmasi</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. DASHBOARD ADMIN -->
+            <div id="page-dashboard-admin" class="hidden space-y-6">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div onclick="filterAdminTable('All')" class="cursor-pointer bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 hover:shadow-md transition">
+                        <p class="text-xs text-gray-500 uppercase font-bold">Total Siswa</p>
+                        <h3 id="stat-total" class="text-2xl font-bold text-gray-800">0</h3>
+                    </div>
+                    <div onclick="filterAdminTable('Sesuai')" class="cursor-pointer bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500 hover:shadow-md transition">
+                        <p class="text-xs text-gray-500 uppercase font-bold text-green-600">Sesuai</p>
+                        <h3 id="stat-sesuai" class="text-2xl font-bold text-gray-800">0</h3>
+                    </div>
+                    <div onclick="filterAdminTable('Tidak Sesuai')" class="cursor-pointer bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 hover:shadow-md transition">
+                        <p class="text-xs text-gray-500 uppercase font-bold text-red-600">Tidak Sesuai</p>
+                        <h3 id="stat-tidak" class="text-2xl font-bold text-gray-800">0</h3>
+                    </div>
+                    <div onclick="filterAdminTable('Belum')" class="cursor-pointer bg-white p-4 rounded-xl shadow-sm border-l-4 border-gray-400 hover:shadow-md transition">
+                        <p class="text-xs text-gray-500 uppercase font-bold text-gray-500">Belum Konfirmasi</p>
+                        <h3 id="stat-belum" class="text-2xl font-bold text-gray-800">0</h3>
+                    </div>
+                </div>
+
+                <!-- Admin Controls -->
+                <div class="flex flex-wrap gap-2 justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+                    <div class="flex gap-2 flex-wrap">
+                        <button onclick="openModalAdd()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2">
+                            <i class="fas fa-plus"></i> Tambah Siswa
+                        </button>
+                        <label class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition cursor-pointer flex items-center gap-2">
+                            <i class="fas fa-file-excel"></i> Import Excel
+                            <input type="file" id="import-excel" class="hidden" accept=".xlsx, .xls" onchange="handleExcelImport(event)">
+                        </label>
+                        <button onclick="downloadTemplate()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition flex items-center gap-2">
+                            <i class="fas fa-download"></i> Template
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="exportToExcel()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition flex items-center gap-2">
+                            <i class="fas fa-file-export"></i> Cetak Rekap
+                        </button>
+                        <button onclick="changeAdminPassword()" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition flex items-center gap-2">
+                            <i class="fas fa-key"></i> Ganti Password
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-600 border-b">
+                                <tr>
+                                    <th class="px-6 py-4 font-semibold">NISN</th>
+                                    <th class="px-6 py-4 font-semibold">Nama Lengkap</th>
+                                    <th class="px-6 py-4 font-semibold">Kelas</th>
+                                    <th class="px-6 py-4 font-semibold">Status</th>
+                                    <th class="px-6 py-4 font-semibold text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-table-body">
+                                <!-- Data via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white p-6 border-t text-center text-gray-400 text-xs">
+            <p>&copy; 2026 SMP Negeri 1 Dawan. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <!-- MODAL ADD/EDIT -->
+    <div id="modal-siswa" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 overflow-hidden">
+            <h3 id="modal-title" class="text-lg font-bold mb-4">Tambah Data Siswa</h3>
+            <div class="space-y-3">
+                <input type="hidden" id="edit-id">
+                <input type="text" id="m-nisn" placeholder="NISN" class="w-full p-2 border rounded-lg outline-none">
+                <input type="text" id="m-nama" placeholder="Nama Lengkap" class="w-full p-2 border rounded-lg outline-none">
+                <input type="text" id="m-tempat" placeholder="Tempat Lahir" class="w-full p-2 border rounded-lg outline-none">
+                <input type="date" id="m-tgl" class="w-full p-2 border rounded-lg outline-none">
+                <input type="text" id="m-kelas" placeholder="Kelas" class="w-full p-2 border rounded-lg outline-none">
+            </div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="closeModal()" class="flex-1 bg-gray-200 py-2 rounded-lg font-medium">Batal</button>
+                <button onclick="saveSiswa()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="loading" class="hidden fixed inset-0 bg-white bg-opacity-80 flex flex-col items-center justify-center z-[100]">
+        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+        <p class="text-blue-800 font-medium">Memproses data...</p>
+    </div>
 
     <script>
-        /** * PENTING: TEMPEL URL GAS ANDA DI SINI
-         * Pastikan berakhiran /exec
-         */
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxdxuOVFmjS0yQPwCjxPRHvCdpK8khfP3S85L_gX5LDz-IwLp7yZVRqgQf73xNtw0AeIQ/exec"; 
+        // CONFIGURATION
+        const IS_PREVIEW = false; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwnIBJpibPpSlZUgL6o0v0tIPKeK3pI1J9qZHDri7sQzWWtUhnQByOEZSYtLQCCKty0bw/exec"; // Akan diisi user nanti
+        const ADMIN_PASS_DEFAULT = "50102335";
+        const DUMMY_S_NISN = "12345";
+        const DUMMY_S_PASS = "12345";
 
-        let userState = null;
-        let dbSiswa = [];
+        let currentSiswa = null;
+        let allSiswaData = [];
+        let adminPassword = ADMIN_PASS_DEFAULT;
 
-        function showView(id) {
-            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-            const target = document.getElementById(id);
-            if(target) target.classList.remove('hidden');
+        // SECURITY SCRIPT
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'U'))) {
+                e.preventDefault();
+                document.getElementById('security-overlay').style.display = 'flex';
+                setTimeout(() => { document.getElementById('security-overlay').style.display = 'none'; }, 2000);
+            }
+        });
+
+        // APP LOGIC
+        window.onload = function() {
+            if (IS_PREVIEW) {
+                console.log("App Running in Preview Mode");
+                loadDummyData();
+            }
         }
 
-        function showAdminGate() { showView('view-admin-gate'); }
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
 
-        /**
-         * FUNGSI KRUSIAL: Menggunakan 'no-cors' jika fetch biasa gagal.
-         * Kami menggunakan URL query parameter agar lebih stabil untuk GET.
-         */
-        async function fetchGAS(params) {
-            const query = new URLSearchParams(params).toString();
-            const fullUrl = `${GAS_URL}?${query}`;
+        function togglePage(id) {
+            const pages = ['page-login-siswa', 'page-login-admin', 'page-dashboard-siswa', 'page-dashboard-admin'];
+            pages.forEach(p => document.getElementById(p).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
             
-            try {
-                // Gunakan mode cors secara default
-                const response = await fetch(fullUrl, { method: 'GET' });
-                const text = await response.text();
-                return JSON.parse(text);
-            } catch (error) {
-                console.warn("Retrying with redirect logic...");
-                // Jika gagal karena CORS, biasanya karena Google Apps Script melakukan Redirect
-                // Kita coba buka di window baru atau tampilkan pesan instruksi
-                showToast("Sistem sedang sinkronisasi, coba klik tombol sekali lagi.", "error");
-                return { success: false, message: "Koneksi terhambat" };
+            const userInfo = document.getElementById('user-info');
+            if (id.includes('dashboard')) {
+                userInfo.classList.remove('hidden');
+            } else {
+                userInfo.classList.add('hidden');
             }
         }
 
-        async function loginSiswa() {
-            const u = document.getElementById('siswa-user').value;
-            const p = document.getElementById('siswa-pass').value;
-            if(!u || !p) return showToast("Isi NISN!", "error");
-            
-            setLoading('btn-login-siswa', true);
-            const data = await fetchGAS({ action: 'loginSiswa', nisn: u, pass: p });
-            if(data.success) {
-                userState = data.data;
-                renderSiswa();
-                showView('view-dash-siswa');
-            } else { 
-                showToast(data.message || "Data tidak ditemukan", "error"); 
-            }
-            setLoading('btn-login-siswa', false);
-        }
+        // --- AUTH SECTION ---
 
-        async function loginAdmin() {
-            const p = document.getElementById('admin-pass').value;
-            setLoading('btn-login-admin', true);
-            const data = await fetchGAS({ action: 'loginAdmin', pass: p });
-            if(data.success) {
-                loadAdminData();
-            } else { 
-                showToast("Password Admin Salah!", "error"); 
-            }
-            setLoading('btn-login-admin', false);
-        }
+        function loginSiswa() {
+            const user = document.getElementById('siswa-user').value;
+            const pass = document.getElementById('siswa-pass').value;
 
-        async function loadAdminData() {
-            const data = await fetchGAS({ action: 'getAllSiswa' });
-            if(data.success) {
-                dbSiswa = data.data;
-                renderAdminTable();
-                showView('view-dash-admin');
-            }
-        }
-
-        function renderAdminTable() {
-            const b = document.getElementById('admin-table');
-            b.innerHTML = '';
-            let stats = { total:0, sesuai:0, salah:0, belum:0 };
-            dbSiswa.forEach(siswa => {
-                stats.total++;
-                let statusClass = "bg-yellow-100 text-yellow-700";
-                if(siswa.Status_Konfirmasi === 'Sesuai') { stats.sesuai++; statusClass = "bg-green-100 text-green-700"; }
-                else if(siswa.Status_Konfirmasi === 'Tidak Sesuai') { stats.salah++; statusClass = "bg-red-100 text-red-700"; }
-                else { stats.belum++; }
-
-                b.innerHTML += `<tr>
-                    <td class="p-4 text-sm font-mono">${siswa.NISN}</td>
-                    <td class="p-4 text-sm font-bold">${siswa.Nama}</td>
-                    <td class="p-4 text-sm">${siswa.Kelas}</td>
-                    <td class="p-4 text-center">
-                        <span class="text-[10px] px-2 py-1 rounded-full font-bold ${statusClass}">${siswa.Status_Konfirmasi || 'Belum'}</span>
-                    </td>
-                </tr>`;
-            });
-            document.getElementById('st-total').innerText = stats.total;
-            document.getElementById('st-sesuai').innerText = stats.sesuai;
-            document.getElementById('st-salah').innerText = stats.salah;
-            document.getElementById('st-belum').innerText = stats.belum;
-        }
-
-        function renderSiswa() {
-            const d = userState;
-            document.getElementById('siswa-content').innerHTML = `
-                <div class="p-3 bg-white rounded shadow-sm border">
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">NISN</p><b>${d.NISN}</b>
-                </div>
-                <div class="p-3 bg-white rounded shadow-sm border">
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">Nama</p><b>${d.Nama}</b>
-                </div>
-                <div class="p-3 bg-white rounded shadow-sm border">
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">Tempat/Tgl Lahir</p><b>${d.Tempat_Lahir}, ${d.Tanggal_Lahir}</b>
-                </div>
-                <div class="p-3 bg-white rounded shadow-sm border">
-                    <p class="text-[10px] text-gray-400 font-bold uppercase">Kelas</p><b>${d.Kelas}</b>
-                </div>
-            `;
-        }
-
-        async function submitSiswa() {
-            const rad = document.querySelector('input[name="konf"]:checked');
-            if(!rad) return showToast("Pilih konfirmasi!", "error");
-            setLoading('btn-konf', true);
-            const data = await fetchGAS({ action: 'submitKonfirmasi', nisn: userState.NISN, status: rad.value });
-            if(data.success) {
-                showToast("Berhasil Terkirim!", "success");
-                setTimeout(() => location.reload(), 2000);
-            }
-            setLoading('btn-konf', false);
-        }
-
-        async function doImport() {
-            const f = document.getElementById('file-excel').files[0];
-            if(!f) return showToast("Pilih file!", "error");
-            setLoading('btn-imp', true);
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
-                const jsonData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                // Mengirim data via POST (biasanya lebih aman untuk data besar)
-                const res = await fetch(GAS_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'importSiswa', data: jsonData })
-                });
-                const r = await res.json();
-                if(r.success) {
-                    showToast("Import Berhasil", "success");
-                    loadAdminData();
+            if (IS_PREVIEW) {
+                if (user === DUMMY_S_NISN && pass === DUMMY_S_PASS) {
+                    currentSiswa = allSiswaData.find(s => s.NISN === DUMMY_S_NISN);
+                    if(!currentSiswa) {
+                        currentSiswa = {NISN: "12345", Nama: "Siswa Dummy", Tempat: "Dawan", Tgl: "2010-01-01", Kelas: "IX A", Status: ""};
+                    }
+                    startSiswaSession(currentSiswa);
+                } else {
+                    Swal.fire('Error', 'NISN atau Password salah!', 'error');
                 }
+                return;
+            }
+
+            // Real GAS Login Siswa
+            callGas('loginSiswa', {user, pass}, (res) => {
+                if(res.success) {
+                    currentSiswa = res.data;
+                    startSiswaSession(currentSiswa);
+                } else {
+                    Swal.fire('Gagal', res.message, 'error');
+                }
+            });
+        }
+
+        function startSiswaSession(data) {
+            document.getElementById('display-name').innerText = data.Nama;
+            renderSiswaDashboard(data);
+            togglePage('page-dashboard-siswa');
+            Swal.fire({
+                title: 'Halo!',
+                text: 'Selamat Datang ' + data.Nama,
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+
+        function showAdminLogin() { togglePage('page-login-admin'); }
+        function backToLogin() { togglePage('page-login-siswa'); }
+
+        function loginAdmin() {
+            const pass = document.getElementById('admin-pass').value;
+            if (IS_PREVIEW) {
+                if (pass === adminPassword) {
+                    startAdminSession();
+                } else {
+                    Swal.fire('Salah!', 'Password admin tidak sesuai', 'error');
+                }
+                return;
+            }
+
+            callGas('loginAdmin', {pass}, (res) => {
+                if(res.success) {
+                    startAdminSession();
+                } else {
+                    Swal.fire('Gagal', res.message, 'error');
+                }
+            });
+        }
+
+        function startAdminSession() {
+            document.getElementById('display-name').innerText = "Pak Andhi";
+            togglePage('page-dashboard-admin');
+            refreshAdminData();
+            Swal.fire('Berhasil', 'Selamat Datang Pak Andhi Ganteng!', 'success');
+        }
+
+        function logout() {
+            currentSiswa = null;
+            document.getElementById('siswa-user').value = "";
+            document.getElementById('siswa-pass').value = "";
+            document.getElementById('admin-pass').value = "";
+            togglePage('page-login-siswa');
+            Swal.fire('Logout', 'Anda telah keluar sistem', 'info');
+        }
+
+        // --- SISWA DASHBOARD ---
+
+        function renderSiswaDashboard(data) {
+            const content = document.getElementById('siswa-data-content');
+            content.innerHTML = `
+                <div class="border-b pb-2"><strong>NISN:</strong> <p class="text-blue-700 text-base">${data.NISN}</p></div>
+                <div class="border-b pb-2"><strong>Nama Lengkap:</strong> <p class="text-blue-700 text-base uppercase">${data.Nama}</p></div>
+                <div class="border-b pb-2"><strong>Tempat Lahir:</strong> <p class="text-blue-700 text-base">${data.Tempat || '-'}</p></div>
+                <div class="border-b pb-2"><strong>Tanggal Lahir:</strong> <p class="text-blue-700 text-base">${data.Tgl || '-'}</p></div>
+                <div class="border-b pb-2"><strong>Kelas:</strong> <p class="text-blue-700 text-base">${data.Kelas || '-'}</p></div>
+            `;
+
+            // Set radio if already confirmed
+            const radios = document.getElementsByName('konfirmasi');
+            radios.forEach(r => {
+                if(r.value === data.Status) r.checked = true;
+            });
+        }
+
+        function submitKonfirmasi() {
+            const selected = document.querySelector('input[name="konfirmasi"]:checked');
+            if(!selected) return Swal.fire('Oops', 'Pilih salah satu status konfirmasi', 'warning');
+
+            const status = selected.value;
+            if(IS_PREVIEW) {
+                currentSiswa.Status = status;
+                Swal.fire('Berhasil', 'Konfirmasi data berhasil dikirim!', 'success');
+                return;
+            }
+
+            callGas('submitKonfirmasi', {nisn: currentSiswa.NISN, status: status}, (res) => {
+                if(res.success) {
+                    Swal.fire('Berhasil', 'Konfirmasi berhasil diperbarui', 'success');
+                }
+            });
+        }
+
+        // --- ADMIN DASHBOARD ---
+
+        function refreshAdminData() {
+            if(IS_PREVIEW) {
+                renderAdminTable(allSiswaData);
+                calculateStats(allSiswaData);
+                return;
+            }
+            callGas('getAllSiswa', {}, (res) => {
+                allSiswaData = res.data;
+                renderAdminTable(allSiswaData);
+                calculateStats(allSiswaData);
+            });
+        }
+
+        function calculateStats(data) {
+            document.getElementById('stat-total').innerText = data.length;
+            document.getElementById('stat-sesuai').innerText = data.filter(s => s.Status === 'Sesuai').length;
+            document.getElementById('stat-tidak').innerText = data.filter(s => s.Status === 'Tidak Sesuai').length;
+            document.getElementById('stat-belum').innerText = data.filter(s => !s.Status || s.Status === '').length;
+        }
+
+        function renderAdminTable(data) {
+            const body = document.getElementById('admin-table-body');
+            body.innerHTML = "";
+            data.forEach(s => {
+                let statusClass = "bg-gray-100 text-gray-500";
+                if(s.Status === 'Sesuai') statusClass = "bg-green-100 text-green-700";
+                if(s.Status === 'Tidak Sesuai') statusClass = "bg-red-100 text-red-700";
+
+                const row = `
+                    <tr class="border-b hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 font-medium text-gray-800">${s.NISN}</td>
+                        <td class="px-6 py-4 text-gray-600">${s.Nama}</td>
+                        <td class="px-6 py-4 text-gray-600">${s.Kelas}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold ${statusClass}">
+                                ${s.Status || 'Belum Konfirmasi'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="editSiswa('${s.NISN}')" class="text-blue-500 hover:bg-blue-50 p-2 rounded transition"><i class="fas fa-edit"></i></button>
+                                <button onclick="deleteSiswa('${s.NISN}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                body.innerHTML += row;
+            });
+        }
+
+        function filterAdminTable(filter) {
+            let filtered = allSiswaData;
+            if(filter === 'Sesuai') filtered = allSiswaData.filter(s => s.Status === 'Sesuai');
+            if(filter === 'Tidak Sesuai') filtered = allSiswaData.filter(s => s.Status === 'Tidak Sesuai');
+            if(filter === 'Belum') filtered = allSiswaData.filter(s => !s.Status || s.Status === '');
+            renderAdminTable(filtered);
+        }
+
+        // MODAL ACTIONS
+        function openModalAdd() {
+            document.getElementById('modal-title').innerText = "Tambah Data Siswa";
+            document.getElementById('edit-id').value = "";
+            document.getElementById('m-nisn').value = "";
+            document.getElementById('m-nama').value = "";
+            document.getElementById('m-tempat').value = "";
+            document.getElementById('m-tgl').value = "";
+            document.getElementById('m-kelas').value = "";
+            document.getElementById('modal-siswa').classList.remove('hidden');
+        }
+
+        function editSiswa(nisn) {
+            const s = allSiswaData.find(x => x.NISN === nisn);
+            if(!s) return;
+            document.getElementById('modal-title').innerText = "Edit Data Siswa";
+            document.getElementById('edit-id').value = s.NISN;
+            document.getElementById('m-nisn').value = s.NISN;
+            document.getElementById('m-nama').value = s.Nama;
+            document.getElementById('m-tempat').value = s.Tempat;
+            document.getElementById('m-tgl').value = s.Tgl;
+            document.getElementById('m-kelas').value = s.Kelas;
+            document.getElementById('modal-siswa').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal-siswa').classList.add('hidden'); }
+
+        function saveSiswa() {
+            const payload = {
+                NISN: document.getElementById('m-nisn').value,
+                Nama: document.getElementById('m-nama').value,
+                Tempat: document.getElementById('m-tempat').value,
+                Tgl: document.getElementById('m-tgl').value,
+                Kelas: document.getElementById('m-kelas').value
             };
-            reader.readAsArrayBuffer(f);
-            setLoading('btn-imp', false);
+            const oldNisn = document.getElementById('edit-id').value;
+
+            if(!payload.NISN || !payload.Nama) return Swal.fire('Error', 'Minimal NISN dan Nama terisi', 'error');
+
+            if(IS_PREVIEW) {
+                if(oldNisn) {
+                    const idx = allSiswaData.findIndex(x => x.NISN === oldNisn);
+                    allSiswaData[idx] = {...allSiswaData[idx], ...payload};
+                } else {
+                    allSiswaData.push({...payload, Status: ""});
+                }
+                closeModal();
+                refreshAdminData();
+                Swal.fire('Tersimpan', 'Data berhasil diperbarui', 'success');
+                return;
+            }
+
+            callGas('saveSiswa', {data: payload, oldNisn: oldNisn}, (res) => {
+                if(res.success) {
+                    closeModal();
+                    refreshAdminData();
+                    Swal.fire('Tersimpan', 'Data berhasil diperbarui di Cloud', 'success');
+                }
+            });
         }
 
-        function setLoading(id, is) { 
-            const b = document.getElementById(id);
-            if(is) { b.disabled = true; b.innerHTML = `<span class="loader"></span>`; }
-            else { b.disabled = false; b.innerHTML = "SELESAI"; }
+        function deleteSiswa(nisn) {
+            Swal.fire({
+                title: 'Hapus Data?',
+                text: "Data siswa " + nisn + " akan dihapus permanen!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Ya, Hapus!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if(IS_PREVIEW) {
+                        allSiswaData = allSiswaData.filter(s => s.NISN !== nisn);
+                        refreshAdminData();
+                        return;
+                    }
+                    callGas('deleteSiswa', {nisn}, (res) => {
+                        if(res.success) refreshAdminData();
+                    });
+                }
+            });
         }
 
-        function showToast(m, t) {
-            const el = document.getElementById('toast');
-            el.innerText = m; el.style.backgroundColor = t=='success'?'#10b981':'#ef4444';
-            el.style.transform = 'translateY(0)';
-            setTimeout(() => el.style.transform = 'translateY(150%)', 3000);
+        // --- EXCEL & TOOLS ---
+
+        function downloadTemplate() {
+            const data = [["NISN", "Nama Siswa", "Tempat Lahir", "Tanggal Lahir (YYYY-MM-DD)", "Kelas"]];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Template");
+            XLSX.writeFile(wb, "Template_Siswa_SMPN1Dawan.xlsx");
+        }
+
+        function handleExcelImport(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const ws = workbook.Sheets[workbook.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(ws);
+                
+                // Map columns
+                const imported = json.map(row => ({
+                    NISN: String(row["NISN"] || ""),
+                    Nama: row["Nama Siswa"] || "",
+                    Tempat: row["Tempat Lahir"] || "",
+                    Tgl: row["Tanggal Lahir (YYYY-MM-DD)"] || "",
+                    Kelas: row["Kelas"] || "",
+                    Status: ""
+                })).filter(x => x.NISN && x.Nama);
+
+                if(IS_PREVIEW) {
+                    allSiswaData = [...allSiswaData, ...imported];
+                    refreshAdminData();
+                    Swal.fire('Sukses', imported.length + ' data berhasil diimport!', 'success');
+                } else {
+                    callGas('bulkImport', {data: imported}, (res) => {
+                        refreshAdminData();
+                        Swal.fire('Sukses', res.message, 'success');
+                    });
+                }
+                e.target.value = "";
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportToExcel() {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(allSiswaData);
+            XLSX.utils.book_append_sheet(wb, ws, "Rekap Konfirmasi");
+            XLSX.writeFile(wb, "Rekap_Siswa_SMPN1Dawan.xlsx");
+            Swal.fire('Berhasil', 'Data rekapitulasi sedang diunduh', 'success');
+        }
+
+        async function changeAdminPassword() {
+            const { value: newPass } = await Swal.fire({
+                title: 'Ganti Password Admin',
+                input: 'password',
+                inputLabel: 'Password Baru',
+                inputPlaceholder: 'Masukkan password baru',
+                showCancelButton: true
+            });
+
+            if (newPass) {
+                if(IS_PREVIEW) {
+                    adminPassword = newPass;
+                    Swal.fire('Sukses', 'Password admin berhasil diganti (Preview)', 'success');
+                } else {
+                    callGas('updateAdminPass', {pass: newPass}, (res) => {
+                        Swal.fire('Sukses', 'Password Cloud berhasil diupdate', 'success');
+                    });
+                }
+            }
+        }
+
+        // DUMMY INITIAL DATA
+        function loadDummyData() {
+            allSiswaData = [
+                {NISN: "12345", Nama: "I Wayan Siswa", Tempat: "Klungkung", Tgl: "2009-05-12", Kelas: "IX A", Status: "Sesuai"},
+                {NISN: "12346", Nama: "Ni Kadek Belum", Tempat: "Dawan", Tgl: "2010-02-20", Kelas: "VIII C", Status: ""},
+                {NISN: "12347", Nama: "Made Salah", Tempat: "Denpasar", Tgl: "2009-11-30", Kelas: "IX B", Status: "Tidak Sesuai"},
+            ];
+            refreshAdminData();
+        }
+
+        // BRIDGE TO GAS
+        function callGas(action, payload, callback) {
+            showLoading(true);
+            if(!GAS_URL || GAS_URL === "") {
+                showLoading(false);
+                return Swal.fire('Error', 'GAS URL Belum Diisi!', 'error');
+            }
+
+            const form = new FormData();
+            form.append('action', action);
+            form.append('payload', JSON.stringify(payload));
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: form
+            })
+            .then(res => res.json())
+            .then(data => {
+                showLoading(false);
+                callback(data);
+            })
+            .catch(err => {
+                showLoading(false);
+                Swal.fire('Network Error', 'Gagal menghubungi server GAS', 'error');
+            });
         }
     </script>
 </body>
