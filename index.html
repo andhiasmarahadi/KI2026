@@ -241,8 +241,8 @@
 
     <script>
         // CONFIGURATION
-        const IS_PREVIEW = false; 
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbwnIBJpibPpSlZUgL6o0v0tIPKeK3pI1J9qZHDri7sQzWWtUhnQByOEZSYtLQCCKty0bw/exec"; // Akan diisi user nanti
+        const IS_PREVIEW = true; 
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxl26k4aWtWekzNDxtoaXAhX9rXuNV3LSEIDaHaj-kIHBWhXtYwFGIqwqAwl0h34pCDcg/exec"; // Akan diisi user nanti
         const ADMIN_PASS_DEFAULT = "50102335";
         const DUMMY_S_NISN = "12345";
         const DUMMY_S_PASS = "12345";
@@ -288,11 +288,16 @@
         // --- AUTH SECTION ---
 
         function loginSiswa() {
-            const user = document.getElementById('siswa-user').value;
-            const pass = document.getElementById('siswa-pass').value;
+            const user = document.getElementById('siswa-user').value.trim();
+            const pass = document.getElementById('siswa-pass').value.trim();
 
             if (IS_PREVIEW) {
-                if (user === DUMMY_S_NISN && pass === DUMMY_S_PASS) {
+                // Memeriksa NISN pada seluruh data database preview
+                const found = allSiswaData.find(s => s.NISN === user);
+                if (found && user === pass) {
+                    currentSiswa = found;
+                    startSiswaSession(currentSiswa);
+                } else if (user === DUMMY_S_NISN && pass === DUMMY_S_PASS) {
                     currentSiswa = allSiswaData.find(s => s.NISN === DUMMY_S_NISN);
                     if(!currentSiswa) {
                         currentSiswa = {NISN: "12345", Nama: "Siswa Dummy", Tempat: "Dawan", Tgl: "2010-01-01", Kelas: "IX A", Status: ""};
